@@ -1,0 +1,7 @@
+# 本地敏感配置与生成物
+.env
+.venv/
+exports/
+mediacrawler_logs/
+__pycache__/
+*.pyc

@@ -1,0 +1,8 @@
+"""分层设置入口：按 DJANGO_ENV 环境变量选择配置模块。"""
+import os
+
+env = os.environ.get("DJANGO_ENV", "dev")
+if env == "prod":
+    from .prod import *  # noqa: F401,F403
+else:
+    from .dev import *  # noqa: F401,F403

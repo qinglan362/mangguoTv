@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="b453a949-00c4-4abe-9b06-50db8f5bd3c8" name="更改" comment="修改">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Django/Djiango/settings/base.py" beforeDir="false" afterPath="$PROJECT_DIR$/Django/Djiango/settings/base.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Django/dashboard/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/Django/dashboard/models.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Django/dashboard/services/query.py" beforeDir="false" afterPath="$PROJECT_DIR$/Django/dashboard/services/query.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Django/dashboard/tests.py" beforeDir="false" afterPath="$PROJECT_DIR$/Django/dashboard/tests.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Django/dashboard/urls.py" beforeDir="false" afterPath="$PROJECT_DIR$/Django/dashboard/urls.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Django/dashboard/views.py" beforeDir="false" afterPath="$PROJECT_DIR$/Django/dashboard/views.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Django/db.sqlite3" beforeDir="false" afterPath="$PROJECT_DIR$/Django/db.sqlite3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Django/reports/services/report_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/Django/reports/services/report_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Django/tasks/services/scheduler.py" beforeDir="false" afterPath="$PROJECT_DIR$/Django/tasks/services/scheduler.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/vue/src/api/modules/dashboard.ts" beforeDir="false" afterPath="$PROJECT_DIR$/vue/src/api/modules/dashboard.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/vue/src/views/Dashboard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/vue/src/views/Dashboard.vue" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="CopilotPersistence">
+    <persistenceIdMap>
+      <entry key="_D:/JetBrains/PyCharm/pythonproject/yuqing" value="3HuAcXHilcNzKOOrhbjFJ3E9YBS" />
+    </persistenceIdMap>
+  </component>
+  <component name="DjangoConsoleOptions" custom-start-script="import sys; print('Python %s on %s' % (sys.version, sys.platform))&#10;import django; print('Django %s' % django.get_version())&#10;sys.path.extend([WORKING_DIR_AND_PYTHON_PATHS])&#10;if 'setup' in dir(django): django.setup()&#10;import django_manage_shell; django_manage_shell.run(PROJECT_ROOT)">
+    <option name="myCustomStartScript" value="import sys; print('Python %s on %s' % (sys.version, sys.platform))&#10;import django; print('Django %s' % django.get_version())&#10;sys.path.extend([WORKING_DIR_AND_PYTHON_PATHS])&#10;if 'setup' in dir(django): django.setup()&#10;import django_manage_shell; django_manage_shell.run(PROJECT_ROOT)" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+    <option name="ROOT_SYNC" value="DONT_SYNC" />
+    <option name="UPDATE_TYPE" value="REBASE" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;qinglan362&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/qinglan362/yuqing.git&quot;,
+    &quot;accountId&quot;: &quot;66bff625-9d4d-49a4-a054-2b31762a819b&quot;
+  }
+}</component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 2
+}</component>
+  <component name="ProjectId" id="3HTkoTJYzWXsFomHNwntkN1BRPV" />
+  <component name="ProjectSessionTemplates">
+    <option name="panelTemplate">
+      <template>
+        <option name="modeId" value="Agent" />
+        <option name="model">
+          <model>
+            <option name="modelType" value="builtin_id" />
+            <option name="modelValue" value="auto" />
+          </model>
+        </option>
+        <option name="targetType" value="BACKGROUND" />
+        <option name="worktreeMode" value="WORKSPACE" />
+      </template>
+    </option>
+  </component>
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Django 服务器.Djiang.executor&quot;: &quot;Run&quot;,
+    &quot;Django 服务器.Djiango.executor&quot;: &quot;Run&quot;,
+<<<<<<< HEAD
+=======
+    &quot;Django 服务器.yuqing.executor&quot;: &quot;Run&quot;,
+>>>>>>> 417ba1e (815修改)
+    &quot;Django 服务器.舆情收集平台.executor&quot;: &quot;Run&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.manage.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.OpenDjangoStructureViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
+    &quot;copilot.chat.legacySessionMetadata.migrated&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;last_opened_file_path&quot;: &quot;D:/舆情收集平台&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;npm.dev.executor&quot;: &quot;Run&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;project.propVCSSupport.DirectoryMappings&quot;,
+    &quot;ts.external.directory.path&quot;: &quot;D:\\舆情收集平台\\vue\\node_modules\\typescript\\lib&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  }
+}</component>
+  <component name="RunManager">
+    <configuration name="yuqing" type="Python.DjangoServer" factoryName="Django server">
+      <module name="yuqing" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="DEBUG_JUST_MY_CODE" value="false" />
+      <option name="RUN_TOOL" value="" />
+      <option name="launchJavascriptDebuger" value="false" />
+      <option name="port" value="8000" />
+      <option name="host" value="" />
+      <option name="additionalOptions" value="" />
+      <option name="browserUrl" value="" />
+      <option name="runTestServer" value="false" />
+      <option name="runNoReload" value="false" />
+      <option name="useCustomRunCommand" value="false" />
+      <option name="customRunCommand" value="" />
+      <method v="2" />
+    </configuration>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-31caf2ab9e3c-JavaScript-PY-261.23567.174" />
+        <option value="bundled-python-sdk-024ed6589d45-c2ffad84badb-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-261.23567.174" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="默认任务">
+      <changelist id="b453a949-00c4-4abe-9b06-50db8f5bd3c8" name="更改" comment="" />
+      <created>1785899620575</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1785899620575</updated>
+      <workItem from="1785899621593" duration="132000" />
+      <workItem from="1785899909696" duration="157000" />
+      <workItem from="1785900076967" duration="278000" />
+      <workItem from="1785900425196" duration="206000" />
+      <workItem from="1785900717585" duration="73000" />
+      <workItem from="1785900799024" duration="13382000" />
+      <workItem from="1786496148345" duration="2771000" />
+      <workItem from="1786586216054" duration="4970000" />
+      <workItem from="1786680852456" duration="13984000" />
+      <workItem from="1786701839914" duration="41000" />
+      <workItem from="1786701912408" duration="22000" />
+      <workItem from="1786707662270" duration="9422000" />
+      <workItem from="1786722706362" duration="277000" />
+      <workItem from="1786723319871" duration="117000" />
+      <workItem from="1786797063945" duration="7490000" />
+    </task>
+    <task id="LOCAL-00001" summary="去去去">
+      <option name="closed" value="true" />
+      <created>1786701638505</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1786701638505</updated>
+    </task>
+    <task id="LOCAL-00002" summary="修改">
+      <option name="closed" value="true" />
+      <created>1786722916366</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1786722916366</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+    <option name="exactExcludedFiles">
+      <list>
+        <option value="$PROJECT_DIR$/vue/node_modules/zrender/index.js" />
+      </list>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <ignored-roots>
+      <path value="$PROJECT_DIR$" />
+      <path value="$PROJECT_DIR$/Media" />
+    </ignored-roots>
+    <MESSAGE value="去去去" />
+    <MESSAGE value="修改" />
+    <option name="LAST_COMMIT_MESSAGE" value="修改" />
+  </component>
+</project>

@@ -1,0 +1,11 @@
+@import './base.css';
+
+/* 全屏布局：去掉 Vite 脚手架残留的 max-width/居中/网格约束 */
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
