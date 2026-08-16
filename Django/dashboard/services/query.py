@@ -186,14 +186,24 @@ def interaction_trend(topic_ids=None, platform=None, start=None, end=None, bucke
 
 # ---------- 帖子排行 ----------
 def hot_posts(topic_ids=None, platform=None, start=None, end=None, limit=10):
-    analyses = _base_analyses(topic_ids, platform, start, end).order_by("-heat_score")[:limit]
+    """热门帖子：仅展示与主题相关（is_related=True）的帖子。
+
+    未选主题时展示全部主题的相关帖；选了主题只展示该主题的相关帖。
+    误命中关键词但被分析判定为不相关的帖子不进入榜单（H：看板只显示相关帖子）。
+    """
+    analyses = (
+        _base_analyses(topic_ids, platform, start, end)
+        .filter(is_related=True)
+        .order_by("-heat_score")[:limit]
+    )
     return [_analysis_brief(a) for a in analyses.select_related("post", "post__author")]
 
 
 def negative_posts(topic_ids=None, platform=None, start=None, end=None, limit=10):
+    """负面帖子：仅展示与主题相关（is_related=True）的负面帖。"""
     analyses = (
         _base_analyses(topic_ids, platform, start, end)
-        .filter(sentiment="negative")
+        .filter(is_related=True, sentiment="negative")
         .order_by("-heat_score")[:limit]
     )
     return [_analysis_brief(a) for a in analyses.select_related("post", "post__author")]

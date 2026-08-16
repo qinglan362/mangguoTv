@@ -178,6 +178,7 @@ SCHEDULER = {
     "max_retries": 3,               # 失败最大重试次数
     "retry_backoff_minutes": [1, 5, 15],
     "auto_start": False,            # 是否在 ready() 内联启动（开发用 DJANGO_AUTO_START_SCHEDULER=1）
+    "alert_check_interval_minutes": 10,  # 预警周期巡检间隔（需求：10 分钟至 1 小时自动监测）
 }
 
 # ============ 邮件通知 ============

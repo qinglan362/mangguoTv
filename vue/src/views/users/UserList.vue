@@ -124,26 +124,26 @@ onMounted(loadUsers)
       </div>
 
       <el-table :data="users" v-loading="loading" style="width: 100%">
-        <el-table-column prop="username" label="用户名" width="160" />
-        <el-table-column label="姓名" width="140">
+        <el-table-column prop="username" label="用户名" min-width="180" />
+        <el-table-column label="姓名" min-width="160">
           <template #default="{ row }">{{ row.name || '-' }}</template>
         </el-table-column>
-        <el-table-column label="角色" width="100">
+        <el-table-column label="角色" min-width="110">
           <template #default="{ row }">
             <el-tag :type="row.role === 'admin' ? 'danger' : 'success'" size="small">
               {{ row.role === 'admin' ? '管理员' : '运营' }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="90">
+        <el-table-column label="状态" min-width="100">
           <template #default="{ row }">
             <el-tag :type="row.is_active ? 'success' : 'info'" size="small">{{ row.is_active ? '启用' : '停用' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="创建时间" width="150">
+        <el-table-column label="创建时间" min-width="160">
           <template #default="{ row }">{{ fmtTime(row.date_joined) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="240" fixed="right">
+        <el-table-column label="操作" min-width="220" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
             <el-button link type="warning" size="small" @click="openReset(row)">重置密码</el-button>

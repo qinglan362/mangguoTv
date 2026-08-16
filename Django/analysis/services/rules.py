@@ -3,6 +3,7 @@
 快路径：不耗 LLM token，置信度高的直接写分析结果。
 """
 import logging
+import re
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -69,7 +70,8 @@ def classify_by_rules(text: str, keywords: list[str], extra_negative: list[str] 
 def check_relevance(text: str, keywords: list[str]) -> bool:
     """主题相关性初判：文本是否命中任一核心/关联关键词。
 
-    1. 忽略大小写匹配整词（"芒果tv" 也能命中 "芒果TV"）；
+    1. 忽略大小写匹配；ASCII 纯字母关键词（如 AI）按整词边界匹配，
+       避免 "ai" 误命中 said/wait 等英文单词；
     2. 长词组关键词（如"芒果TV不好用"）在正文中很少连写出现，退化为
        按 2 字滑窗片段匹配（含"不好用"/"芒果"即判相关），避免全部误判不相关。
     """
@@ -80,7 +82,12 @@ def check_relevance(text: str, keywords: list[str]) -> bool:
         if not kw:
             continue
         kw_lower = kw.lower()
-        if kw_lower in t_lower:
+        hit = False
+        if kw_lower.isascii() and kw_lower.isalpha():
+            hit = re.search(r"\b" + re.escape(kw_lower) + r"\b", t_lower) is not None
+        else:
+            hit = kw_lower in t_lower
+        if hit:
             return True
         if len(kw) >= 4:
             for i in range(len(kw) - 1):

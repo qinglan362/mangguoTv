@@ -138,8 +138,10 @@ def mediacrawler_stop(request):
 
 @api_view(["POST"])
 def mediacrawler_import(request):
-    """手动导入：POST {topic_id, platform?} —— 把 MediaCrawler 已有数据文件导入主题并分析。
+    """手动导入：POST {topic_id, platform?} —— 补导入该主题最近一次采集任务的数据。
 
+    主题归属 = 任务来源：以该主题最近一次启动的 MediaCrawlerRun 行数快照为起点，
+    导入其后新增的行（即该次任务爬到的数据）；没有采集记录时拒绝导入。
     未传 platform 时按主题平台推导（xiaohongshu→xhs，weibo→wb），逐个导入。
     """
     topic_id = request.data.get("topic_id")
@@ -162,8 +164,20 @@ def mediacrawler_import(request):
     created = []
     failed_msgs = []
     for mc_platform in platform_list:
+        latest = (
+            MediaCrawlerRun.objects.filter(topic=topic, platform=mc_platform)
+            .exclude(snapshot_lines={})
+            .order_by("-id")
+            .first()
+        )
+        if latest is None:
+            return Response(
+                {"detail": "该主题还没有采集任务记录，请先启动一次采集（完成后数据会自动导入）"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         run = MediaCrawlerRun.objects.create(
             platform=mc_platform, topic=topic, keywords=_topic_keywords(topic), status="importing",
+            snapshot_lines=latest.snapshot_lines,
         )
         try:
             summary = import_new_data(run)

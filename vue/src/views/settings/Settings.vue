@@ -1,128 +1,142 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { taskApi } from '@/api/modules/task'
-import http from '@/api'
+import { onMounted, onUnmounted, ref } from 'vue'
 import dayjs from 'dayjs'
-
-interface CollectorStatus {
-  platform: string
-  display_name: string
-  enabled: boolean
-  issues: string[]
-}
-
-interface ActiveJob {
-  id: string
-  trigger: string
-  next_run_time: string | null
-}
+import { taskApi, type SchedulerJob } from '@/api/modules/task'
 
 interface SchedulerStatus {
   scheduler_running: boolean
   dispatch_running: boolean
-  active_jobs: ActiveJob[]
-}
-
-interface HealthInfo {
-  status: string
-  version: string
-  env: string
-  timezone: string
-  scheduler_running: boolean
+  active_jobs: SchedulerJob[]
+  pending_queue: number
+  running_count: number
+  recent_failed: { id: number; topic_id: number; platform: string; error_message: string }[]
 }
 
 const scheduler = ref<SchedulerStatus | null>(null)
-const collectors = ref<CollectorStatus[]>([])
-const health = ref<HealthInfo | null>(null)
 const loading = ref(false)
 
-async function loadAll() {
-  loading.value = true
+async function load(silent = false) {
+  if (!silent) loading.value = true
   try {
-    const [s, c, h] = await Promise.all([
-      taskApi.status(),
-      http.get<CollectorStatus[]>('/collectors/'),
-      http.get<HealthInfo>('/health/'),
-    ])
-    scheduler.value = s as SchedulerStatus
-    collectors.value = c
-    health.value = h
+    scheduler.value = (await taskApi.status()) as SchedulerStatus
   } finally {
     loading.value = false
   }
 }
 
-function fmtNext(t: string | null) {
+// 静默轮询刷新调度任务状态（不闪烁 loading）
+let pollTimer: number | undefined
+function startPolling() {
+  stopPolling()
+  pollTimer = window.setInterval(() => load(true), 8000)
+}
+function stopPolling() {
+  if (pollTimer) window.clearInterval(pollTimer)
+  pollTimer = undefined
+}
+
+function fmtTime(t: string | null | undefined) {
   return t ? dayjs(t).format('YYYY-MM-DD HH:mm:ss') : '待调度'
 }
 
-onMounted(loadAll)
+function fmtTrigger(job: SchedulerJob) {
+  if (job.interval_minutes) return '每 ' + job.interval_minutes + ' 分钟'
+  return job.trigger
+}
+
+const KIND_TAG: Record<string, string> = { topic: 'primary', report: 'success', reconcile: 'info', retry: 'warning', snapshot: 'success', alert: 'danger' }
+const RUN_STATUS_LABEL: Record<string, string> = { pending: '待执行', running: '执行中', success: '成功', failed: '失败', canceled: '已取消' }
+
+function runStatusType(status: string) {
+  if (status === 'success') return 'success'
+  if (status === 'failed') return 'danger'
+  if (status === 'running') return 'warning'
+  return 'info'
+}
+
+onMounted(() => {
+  load()
+  startPolling()
+})
+onUnmounted(stopPolling)
 </script>
 
 <template>
   <div class="settings" v-loading="loading">
-    <el-row :gutter="16">
-      <!-- 系统信息 -->
-      <el-col :span="8">
-        <el-card shadow="never">
-          <template #header>系统信息</template>
-          <el-descriptions :column="1" border size="small">
-            <el-descriptions-item label="状态">{{ health?.status === 'ok' ? '正常' : health?.status }}</el-descriptions-item>
-            <el-descriptions-item label="版本">{{ health?.version }}</el-descriptions-item>
-            <el-descriptions-item label="环境">{{ health?.env }}</el-descriptions-item>
-            <el-descriptions-item label="时区">{{ health?.timezone }}</el-descriptions-item>
-            <el-descriptions-item label="调度器">{{ health?.scheduler_running ? '运行中' : '已停止' }}</el-descriptions-item>
-          </el-descriptions>
-        </el-card>
-      </el-col>
+    <el-card shadow="never">
+      <template #header>
+        <div class="card-header">
+          <span>调度任务（{{ scheduler?.active_jobs?.length || 0 }}）</span>
+          <div class="header-right">
+            <el-tag :type="scheduler?.scheduler_running ? 'success' : 'danger'" size="small">
+              调度器：{{ scheduler?.scheduler_running ? '运行中' : '已停止' }}
+            </el-tag>
+            <el-tag :type="scheduler?.dispatch_running ? 'success' : 'danger'" size="small">
+              派发线程：{{ scheduler?.dispatch_running ? '运行中' : '已停止' }}
+            </el-tag>
+            <el-button size="small" @click="load()">刷新</el-button>
+          </div>
+        </div>
+      </template>
 
-      <!-- 采集器状态 -->
-      <el-col :span="8">
-        <el-card shadow="never">
-          <template #header>采集器状态</template>
-          <el-table :data="collectors" size="small">
-            <el-table-column prop="display_name" label="采集器" width="120" />
-            <el-table-column prop="platform" label="平台标识" width="120" />
-            <el-table-column label="状态" width="80">
-              <template #default="{ row }">
-                <el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '已启用' : '未启用' }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="配置问题" min-width="120">
-              <template #default="{ row }">
-                <span v-if="row.issues?.length" class="issue-text">{{ row.issues.join('；') }}</span>
-                <span v-else class="ok-text">无</span>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-card>
-      </el-col>
+      <el-table :data="scheduler?.active_jobs || []" size="small">
+        <el-table-column label="任务名称" min-width="220">
+          <template #default="{ row }">
+            <el-tag :type="KIND_TAG[row.kind] || 'info'" size="small" effect="plain">{{ row.name }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="关联主题" width="150">
+          <template #default="{ row }">
+            <span v-if="row.topic_name">{{ row.topic_name }}</span>
+            <span v-else class="dim">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="触发器" min-width="160" show-overflow-tooltip>
+          <template #default="{ row }">{{ fmtTrigger(row) }}</template>
+        </el-table-column>
+        <el-table-column label="上次执行" width="230">
+          <template #default="{ row }">
+            <span v-if="row.last_run_at" class="time-text">{{ fmtTime(row.last_run_at) }}</span>
+            <span v-else class="dim">-</span>
+            <el-tag v-if="row.last_run_status" size="small" :type="runStatusType(row.last_run_status)" class="ml-4">
+              {{ RUN_STATUS_LABEL[row.last_run_status] || row.last_run_status }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="下次执行" width="170">
+          <template #default="{ row }">
+            <span class="time-text">{{ fmtTime(row.next_run_time) }}</span>
+          </template>
+        </el-table-column>
+      </el-table>
 
-      <!-- 调度任务 -->
-      <el-col :span="8">
-        <el-card shadow="never">
-          <template #header>调度任务（{{ scheduler?.active_jobs?.length || 0 }}）</template>
-          <el-table :data="scheduler?.active_jobs || []" size="small" max-height="320">
-            <el-table-column prop="id" label="任务 ID" width="150" />
-            <el-table-column prop="trigger" label="触发器" min-width="130" show-overflow-tooltip />
-            <el-table-column label="下次执行" min-width="140">
-              <template #default="{ row }">{{ fmtNext(row.next_run_time) }}</template>
-            </el-table-column>
-          </el-table>
-          <el-button style="margin-top: 12px" size="small" @click="loadAll">刷新</el-button>
-        </el-card>
-      </el-col>
-    </el-row>
+      <el-alert
+        v-if="scheduler && !scheduler.scheduler_running"
+        type="warning"
+        :closable="false"
+        show-icon
+        title="调度器未运行：定时采集与报告任务不会触发。开发环境默认随 runserver 自动启动；若单独关闭了内联调度器，请运行 python manage.py runscheduler。"
+        class="mt-12"
+      />
+    </el-card>
+
+    <el-card v-if="scheduler?.recent_failed?.length" shadow="never" class="mt-12">
+      <template #header>最近失败（{{ scheduler.recent_failed.length }}）</template>
+      <el-table :data="scheduler.recent_failed" size="small">
+        <el-table-column label="运行 ID" prop="id" width="90" />
+        <el-table-column label="主题 ID" prop="topic_id" width="90" />
+        <el-table-column label="平台" prop="platform" width="100" />
+        <el-table-column label="错误信息" prop="error_message" show-overflow-tooltip />
+      </el-table>
+    </el-card>
   </div>
 </template>
 
 <style scoped>
-.ok-text {
-  color: #67c23a;
-  font-size: 12px;
-}
-.issue-text {
-  color: #f56c6c;
-  font-size: 12px;
-}
+.card-header { display: flex; justify-content: space-between; align-items: center; }
+.header-right { display: flex; gap: 8px; align-items: center; }
+.ml-4 { margin-left: 4px; }
+.mt-12 { margin-top: 12px; }
+.time-text { font-size: 12px; color: #606266; }
+.dim { color: #c0c4cc; }
 </style>

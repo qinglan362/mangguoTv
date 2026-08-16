@@ -68,6 +68,11 @@ class MediaCrawlerRun(models.Model):
     error_message = models.TextField("错误信息", blank=True, default="")
     started_at = models.DateTimeField("开始时间", auto_now_add=True)
     finished_at = models.DateTimeField("结束时间", null=True, blank=True)
+    snapshot_lines = models.JSONField(
+        "数据文件行数快照", default=dict, blank=True,
+        help_text="任务启动时各数据文件的行数快照；导入时只处理快照之后本任务新增的行，"
+                  "保证「任务爬到的帖子都属于该任务主题」",
+    )
 
     class Meta:
         verbose_name = "MediaCrawler 运行记录"

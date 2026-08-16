@@ -1,10 +1,7 @@
 """REST API 根路由（全部挂 /api/ 前缀）。"""
 from django.urls import include, path
 
-from .views import health
-
 urlpatterns = [
-    path("health/", health, name="health"),
     path("", include("accounts.urls")),
     path("topics/", include("topics.urls")),
     path("collectors/", include("collectors.urls")),

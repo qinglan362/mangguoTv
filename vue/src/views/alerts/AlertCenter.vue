@@ -250,6 +250,13 @@ function snippet(p: Record<string, unknown>) {
 }
 
 // ---------- 初始化 ----------
+// tab 切换时重新拉取：通知/事件多由后台产生，仅挂载时拉一次会长期停留在旧数据
+function onTabChange(name: TabName | string) {
+  if (name === 'events') loadEvents()
+  else if (name === 'rules') loadRules()
+  else if (name === 'notifications') loadNotifications()
+}
+
 onMounted(async () => {
   const topicData = await topicApi.list({ page_size: 100 })
   topics.value = topicData.results
@@ -261,9 +268,17 @@ onMounted(async () => {
 
 <template>
   <div class="alert-center">
-    <el-tabs v-model="activeTab">
+    <el-tabs v-model="activeTab" @tab-change="onTabChange">
       <el-tab-pane label="预警事件" name="events">
         <el-card shadow="never">
+          <el-alert
+            v-if="!rules.length"
+            type="info"
+            :closable="false"
+            show-icon
+            title="当前没有配置任何预警规则，不会产生预警事件；请先在「预警规则」页签新建规则。"
+            style="margin-bottom: 12px"
+          />
           <div class="filter-bar">
             <el-select v-model="eventFilter.topic" placeholder="全部主题" clearable style="width: 200px" @change="eventFilter.page = 1; loadEvents()">
               <el-option v-for="t in topics" :key="t.id" :label="t.name" :value="t.id" />
@@ -338,7 +353,9 @@ onMounted(async () => {
           <el-table :data="rules" style="width: 100%">
             <el-table-column prop="name" label="规则名称" min-width="140" />
             <el-table-column prop="topic_name" label="主题" width="150" />
-            <el-table-column prop="rule_type" label="类型" width="160" />
+            <el-table-column label="类型" width="160">
+              <template #default="{ row }">{{ row.rule_type_label || row.rule_type }}</template>
+            </el-table-column>
             <el-table-column label="等级" width="80">
               <template #default="{ row }">
                 <el-tag :type="LEVEL_MAP[row.level]?.type || 'info'" size="small">{{ LEVEL_MAP[row.level]?.label }}</el-tag>

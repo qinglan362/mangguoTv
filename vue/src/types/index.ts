@@ -86,6 +86,7 @@ export interface AlertRule {
   topic: number
   name: string
   rule_type: string
+  rule_type_label?: string
   config: Record<string, unknown>
   level: AlertLevel
   enabled: boolean

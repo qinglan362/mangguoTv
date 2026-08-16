@@ -6,6 +6,7 @@
 单帖失败仅回滚该帖（记入 filtered），不会拖垮整批。
 """
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -34,12 +35,23 @@ class IngestResult:
     touched_post_ids: set = field(default_factory=set)
 
 
+def _keyword_in_text(word_lower: str, t_lower: str) -> bool:
+    """关键词是否命中文本。
+
+    ASCII 纯字母关键词（如 AI）按整词匹配（词边界），避免 "ai" 误命中
+    said/wait/claimed 等英文单词；中文/混合关键词保持忽略大小写子串匹配。
+    """
+    if word_lower.isascii() and word_lower.isalpha():
+        return re.search(r"\b" + re.escape(word_lower) + r"\b", t_lower) is not None
+    return word_lower in t_lower
+
+
 def _match_keywords(text: str, keywords: list) -> list:
     """返回命中关键词列表 [{"word","kind"}]。
 
-    与 rules.check_relevance 同口径：忽略大小写整词匹配；长词组关键词
-    （如"芒果TV不好用"）在正文中很少连写出现，退化为按 2 字滑窗片段匹配，
-    保证命中明细与高频关键词（词云）有数据。
+    与 rules.check_relevance 同口径：忽略大小写匹配（ASCII 词整词边界）；
+    长词组关键词（如"芒果TV不好用"）在正文中很少连写出现，退化为按 2 字
+    滑窗片段匹配，保证命中明细与高频关键词（词云）有数据。
     """
     matched = []
     t_lower = text.lower()
@@ -47,8 +59,7 @@ def _match_keywords(text: str, keywords: list) -> list:
         word = kw["word"]
         if not word:
             continue
-        w_lower = word.lower()
-        hit = w_lower in t_lower
+        hit = _keyword_in_text(word.lower(), t_lower)
         if not hit and len(word) >= 4:
             hit = any(word[i : i + 2].lower() in t_lower for i in range(len(word) - 1))
         if hit:
@@ -270,7 +281,12 @@ def refresh_interactions(platform: str, post_id: str, stats) -> None:
 
 
 def _attach_topic(post: Post, topic: Topic, text: str, keywords: list):
-    """建立帖↔主题命中关系（同帖同主题仅一条，记录命中全部关键词）。"""
+    """建立帖↔主题命中关系（同帖同主题仅一条，记录命中关键词明细）。
+
+    主题归属 = 任务来源：从哪个任务爬下来的帖子就属于哪个主题，无条件关联；
+    关键词命中只记录 matched_keywords 明细（供命中统计），不决定归属。
+    同一帖子被多个主题的任务爬过则挂多个主题（跨主题去重时分别附加）。
+    """
     matched = _match_keywords(text, keywords)
     hit, created = PostTopicHit.objects.get_or_create(
         post=post,

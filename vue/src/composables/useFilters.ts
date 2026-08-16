@@ -18,7 +18,9 @@ export function useFilters() {
   ])
 
   async function loadTopics() {
-    const res = await topicApi.list({ page_size: 100, status: 'active' })
+    // 不带 status 过滤：主题选择与采集任务是否运行/暂停无关，
+    // 只要采集过数据（未删除的主题）就出现在下拉中，便于查看历史数据
+    const res = await topicApi.list({ page_size: 100 })
     topics.value = (res as { results: Topic[] }).results
   }
 

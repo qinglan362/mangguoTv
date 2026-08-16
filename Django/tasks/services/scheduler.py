@@ -54,6 +54,7 @@ def ensure_started():
             sync_topic(topic)
         _sync_report_jobs(scheduler)
         _sync_keyword_snapshot_jobs(scheduler)
+        _sync_alert_check_jobs(scheduler)
     else:
         # 调度器已在运行（如另起的 runscheduler 进程）→ 立即对账一次
         _reconcile_jobs()
@@ -128,6 +129,12 @@ def _sync_keyword_snapshot_jobs(scheduler):
         max_instances=1,
         next_run_time=timezone.now(),
     )
+
+
+def _sync_alert_check_jobs(scheduler):
+    """注册预警周期巡检任务（实现见 alerts/services/periodic.py）。"""
+    from alerts.services.periodic import register
+    register(scheduler)
 
 
 def refresh_keyword_snapshots():

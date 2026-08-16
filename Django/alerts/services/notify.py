@@ -33,7 +33,11 @@ def _send_email(recipient: str, subject: str, body: str) -> tuple[bool, str]:
         return True, ""
     except Exception as exc:
         logger.warning("alert email to %s failed: %s", recipient, exc)
-        return False, str(exc)
+        err = str(exc)
+        # QQ 等 SMTP 在授权码错误时直接断开连接而非返回认证失败，补提示便于排查
+        if "unexpectedly closed" in err or "authentication" in err.lower() or "auth" in err.lower():
+            err += "（请检查 DJANGO_EMAIL_USER / SMTP 授权码是否正确、邮箱是否已开启 SMTP 服务）"
+        return False, err
 
 
 def _subject_for(event) -> str:
@@ -83,6 +87,14 @@ def dispatch_notifications(event):
             )
             created.append(note)
         elif channel == "email":
+            if not recipients:
+                # 只配了邮件却没填收件人：规则配置缺口，回退站内并留痕，避免预警完全无感知
+                created.append(AlertNotification.objects.create(
+                    event=event, channel="platform", recipient=_PLATFORM_RECIPIENT,
+                    status="sent", sent_at=timezone.now(),
+                    error_message="邮件渠道未配置收件人，已回退站内通知",
+                ))
+                continue
             for recipient in recipients:
                 ok, err = _send_email(recipient, _subject_for(event), _body_for(event))
                 note = AlertNotification.objects.create(

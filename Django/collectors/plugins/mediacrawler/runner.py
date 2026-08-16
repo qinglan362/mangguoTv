@@ -75,6 +75,29 @@ def stop_run():
         return False
 
 
+def _snapshot_data_files(platform: str) -> dict:
+    """快照该平台数据目录下所有 jsonl 文件的当前行数（{相对路径: 行数}）。
+
+    爬虫为单进程串行执行，任务启动时的行数快照即可精确切分「本任务爬取的数据」：
+    导入时只处理快照之后新增的行，使主题归属 = 任务来源。
+    """
+    import glob
+
+    snapshot = {}
+    base = _media_dir()
+    folder = "xhs" if platform == "xhs" else "weibo"
+    data_dir = os.path.join(base, "data", folder, "jsonl")
+    for path in glob.glob(os.path.join(data_dir, "search_*.jsonl")):
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                line_count = sum(1 for _ in fh)
+        except OSError:
+            continue
+        rel = os.path.relpath(path, base).replace("\\", "/")
+        snapshot[rel] = line_count
+    return snapshot
+
+
 def _build_command(platform: str, keywords: list, max_notes: int) -> list:
     """构造 uv run main.py 命令。login 交给 MediaCrawler（浏览器弹二维码）。"""
     uv = shutil.which("uv") or "uv"
@@ -113,7 +136,10 @@ def start_run(run):
     log_path = os.path.join(_log_dir(), "mediacrawler_%s.log" % datetime.now().strftime("%Y%m%d_%H%M%S"))
     run.log_path = log_path
     run.status = "running"
-    run.save(update_fields=["log_path", "status"])
+    # 启动前快照数据文件行数：本次任务爬到的数据 = 快照之后新增的行，
+    # 导入时按该窗口归属到本任务主题（串行执行保证无其他写者）
+    run.snapshot_lines = _snapshot_data_files(run.platform)
+    run.save(update_fields=["log_path", "status", "snapshot_lines"])
 
     env = dict(os.environ)
     env.setdefault("PYTHONIOENCODING", "utf-8")
@@ -243,6 +269,13 @@ def reconcile_stale_runs():
     n = 0
     for run in list(qs):
         run.status = "stopped"
+        if not (run.snapshot_lines or {}):
+            # 排队中未实际启动的任务：没有行数快照，无法界定本任务的数据窗口，不导入
+            run.error_message = "服务重启导致运行中断（排队中未开始，无数据可导入）"
+            run.finished_at = run.finished_at or timezone.now()
+            run.save()
+            n += 1
+            continue
         run.error_message = "服务重启导致运行中断；已抓取的数据已自动导入"
         try:
             from .importer import import_new_data

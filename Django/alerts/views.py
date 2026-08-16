@@ -1,4 +1,6 @@
 """预警模块 API 视图。"""
+import logging
+
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -6,6 +8,8 @@ from rest_framework.response import Response
 
 from alerts.models import AlertEvent, AlertNotification, AlertRule
 from alerts.serializers import AlertEventSerializer, AlertNotificationSerializer, AlertRuleSerializer
+
+logger = logging.getLogger(__name__)
 
 
 class AlertRuleViewSet(viewsets.ModelViewSet):
@@ -21,6 +25,26 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
         if topic:
             qs = qs.filter(topic=topic)
         return qs.select_related("topic").order_by("-updated_at")
+
+    def perform_create(self, serializer):
+        rule = serializer.save()
+        _backlog_check_async_safe(rule)
+
+    def perform_update(self, serializer):
+        was_enabled = serializer.instance.enabled
+        rule = serializer.save()
+        # 重新启用的规则同样立即回溯，避免「启用后要等下次采集才有反馈」
+        if rule.enabled and not was_enabled:
+            _backlog_check_async_safe(rule)
+
+
+def _backlog_check_async_safe(rule):
+    """规则落库后立即回溯检查近 24 小时数据；失败不影响保存结果。"""
+    try:
+        from alerts.services.engine import check_rule_backlog
+        check_rule_backlog(rule)
+    except Exception:
+        logger.exception("backlog check failed for rule %s", rule.id)
 
 
 class AlertEventViewSet(viewsets.ReadOnlyModelViewSet):

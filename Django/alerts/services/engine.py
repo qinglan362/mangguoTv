@@ -52,36 +52,53 @@ def check_after_collection(topic, run=None, post_ids=None):
 
     triggered: list[AlertEvent] = []
     for rule in rules:
-        handler = RULE_HANDLERS.get(rule.rule_type)
-        if handler is None:
-            logger.warning("no handler for rule_type=%s", rule.rule_type)
-            continue
-        try:
-            result = handler(rule, topic, since, post_ids)
-        except Exception:
-            logger.exception("alert rule %s checker failed (topic=%s)", rule.id, topic.id)
-            continue
-        if not result:
-            continue
-        if _in_cooldown(rule):
-            continue
-
-        event = AlertEvent.objects.create(
-            rule=rule,
-            topic=topic,
-            level=rule.level,
-            reason=result.get("reason", "规则触发"),
-            matched_posts=result.get("matched_posts", []),
-            matched_keywords=result.get("matched_keywords", []),
-            metrics=result.get("metrics", {}),
-        )
-        from alerts.services.notify import dispatch_notifications
-        try:
-            dispatch_notifications(event)
-        except Exception:
-            logger.exception("alert notification failed for event %s", event.id)
-        triggered.append(event)
+        event = _process_rule(rule, topic, since, post_ids)
+        if event:
+            triggered.append(event)
     return triggered
+
+
+def check_rule_backlog(rule, lookback_minutes: int = 60 * 24):
+    """对单条规则回溯检查近 lookback_minutes 的数据，返回触发的事件（或 None）。
+
+    用于规则新建/启用后立即评估既有数据：否则要等下一次采集结束才会检查，
+    用户看不到任何反馈，表现为「预警中心不管用」。冷却期照常防重复。
+    """
+    since = timezone.now() - timedelta(minutes=lookback_minutes)
+    return _process_rule(rule, rule.topic, since, post_ids=None)
+
+
+def _process_rule(rule, topic, since, post_ids=None):
+    """执行单条规则：checker → 冷却期 → 创建事件并通知。返回事件或 None。"""
+    handler = RULE_HANDLERS.get(rule.rule_type)
+    if handler is None:
+        logger.warning("no handler for rule_type=%s", rule.rule_type)
+        return None
+    try:
+        result = handler(rule, topic, since, post_ids)
+    except Exception:
+        logger.exception("alert rule %s checker failed (topic=%s)", rule.id, topic.id)
+        return None
+    if not result:
+        return None
+    if _in_cooldown(rule):
+        return None
+
+    event = AlertEvent.objects.create(
+        rule=rule,
+        topic=topic,
+        level=rule.level,
+        reason=result.get("reason", "规则触发"),
+        matched_posts=result.get("matched_posts", []),
+        matched_keywords=result.get("matched_keywords", []),
+        metrics=result.get("metrics", {}),
+    )
+    from alerts.services.notify import dispatch_notifications
+    try:
+        dispatch_notifications(event)
+    except Exception:
+        logger.exception("alert notification failed for event %s", event.id)
+    return event
 
 
 def _in_cooldown(rule: AlertRule) -> bool:

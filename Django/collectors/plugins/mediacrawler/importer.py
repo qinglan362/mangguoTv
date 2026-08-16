@@ -1,9 +1,12 @@
 """MediaCrawler 数据导入器。
 
-扫描 {MEDIACRAWLER_DIR}/data/xhs/jsonl/ 下的 search_contents_*.jsonl 与
-search_comments_*.jsonl，把新行（按文件记录已导入行数增量处理）解析为
-标准 RawPost / 评论，走平台既有流水线：
-    清洗去重(ingest_batch) → 内容识别(规则+LLM) → 预警检查 → 看板展示。
+主题归属规则：**从哪个任务爬下来的帖子就属于哪个主题**。
+
+爬虫为单进程串行执行，任务启动时记录各数据文件行数快照（MediaCrawlerRun.snapshot_lines），
+导入时只处理 [本任务快照, 下一个任务快照) 窗口内新增的行并挂到本任务主题，
+与其他主题任务互不串扰（数据文件按天命名、多主题共用，按文件整体导入会串主题）。
+
+流程：窗口内行 → RawPost/评论 → 清洗去重(ingest_batch) → 内容识别(规则+LLM) → 预警 → 看板。
 """
 import glob
 import json
@@ -56,18 +59,29 @@ def _split_csv(value) -> list:
     return [p.strip() for p in str(value).split(",") if p.strip()]
 
 
-def _file_state(path: str):
-    """取文件的导入进度记录（不写库，成功后由调用方保存）。"""
-    from ..models import MediaCrawlerFileState
+def _read_window(path: str, snapshot: dict, next_snapshot: dict, has_next: bool):
+    """读取「本任务爬取窗口」内的行：[本任务快照行数, 下一个任务快照行数)。
 
+    返回 (lines, total_lines)。文件不存在时返回空；没有后续任务时取到文件末尾。
+    """
+    total = 0
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            all_lines = fh.readlines()
+    except OSError:
+        return [], 0
+    total = len(all_lines)
     rel = os.path.relpath(path, str(settings.MEDIACRAWLER_DIR)).replace("\\", "/")
-    state, _ = MediaCrawlerFileState.objects.get_or_create(path=rel, defaults={"imported_lines": 0})
-    if not os.path.exists(path):
-        return state, [], 0
-    with open(path, "r", encoding="utf-8", errors="replace") as fh:
-        all_lines = fh.readlines()
-    start = min(state.imported_lines, len(all_lines))
-    return state, all_lines[start:], len(all_lines)
+    start = int(snapshot.get(rel, 0) or 0)
+    start = min(start, total)
+    if has_next:
+        # 有后续任务：本任务窗口到下一个任务快照为止（之后的行属于后续任务）
+        end = min(int(next_snapshot.get(rel, 0) or 0), total)
+    else:
+        end = total
+    if end < start:
+        end = start
+    return all_lines[start:end], total
 
 
 def _content_to_raw(item: dict, now=None) -> RawPost:
@@ -159,12 +173,32 @@ def _weibo_content_to_raw(item: dict, now=None) -> RawPost:
     )
 
 
-def import_new_data(run) -> dict:
-    """导入 MediaCrawler 新抓取的数据到 run.topic，并跑分析与预警。
+def _window_snapshots(run) -> tuple:
+    """返回 (snapshot, next_snapshot, has_next)。
 
-    按 run.platform（xhs/wb）选择数据目录与字段映射；
+    snapshot = 本任务启动时的文件行数快照；
+    next_snapshot = 本平台下一个实际启动过的任务快照（作为本任务窗口上界）；
+    没有后续任务时 has_next=False（本任务取到文件末尾）。
+    """
+    from ..models import MediaCrawlerRun
+
+    snapshot = run.snapshot_lines or {}
+    next_run = (
+        MediaCrawlerRun.objects.filter(platform=run.platform, id__gt=run.pk)
+        .exclude(snapshot_lines={})
+        .order_by("id")
+        .first()
+    )
+    if next_run is not None:
+        return snapshot, (next_run.snapshot_lines or {}), True
+    return snapshot, {}, False
+
+
+def import_new_data(run) -> dict:
+    """导入「本任务爬取窗口」内的数据到 run.topic，并跑分析与预警。
+
     返回统计 {fetched, new, duplicate, updated, comments}。
-    文件进度只在数据成功入库后推进，失败可重试不丢数据。
+    重复调用幂等（入库去重 + 窗口固定），失败可重试不丢数据。
     """
     from analysis.services.pipeline import run_for_topic
     from alerts.services.engine import check_after_collection
@@ -181,14 +215,14 @@ def import_new_data(run) -> dict:
     data_dir = _data_dir(mc_platform)
     contents_files = sorted(glob.glob(os.path.join(data_dir, "search_contents_*.jsonl")))
     comments_files = sorted(glob.glob(os.path.join(data_dir, "search_comments_*.jsonl")))
+    snapshot, next_snapshot, has_next = _window_snapshots(run)
 
     now = timezone.now()
 
-    # ---- 1. 解析阶段（不落库）：帖子 ----
+    # ---- 1. 解析阶段（不落库）：本任务窗口内的帖子行 ----
     raw_posts: list[RawPost] = []
-    contents_progress = []  # [(state, total_lines)] 入库成功后推进进度
     for path in contents_files:
-        state, new_lines, total_lines = _file_state(path)
+        new_lines, _ = _read_window(path, snapshot, next_snapshot, has_next)
         for line in new_lines:
             line = line.strip()
             if not line:
@@ -197,13 +231,11 @@ def import_new_data(run) -> dict:
                 raw_posts.append(content_parser(json.loads(line), now))
             except (json.JSONDecodeError, KeyError, TypeError):
                 logger.warning("skip bad jsonl line in %s", path)
-        contents_progress.append((state, total_lines))
 
-    # ---- 2. 解析阶段：评论（暂存 note_id -> 评论列表） ----
+    # ---- 2. 解析阶段：本任务窗口内的评论行 ----
     comments_by_note: dict = {}
-    comments_progress = []
     for path in comments_files:
-        state, new_lines, total_lines = _file_state(path)
+        new_lines, _ = _read_window(path, snapshot, next_snapshot, has_next)
         for line in new_lines:
             line = line.strip()
             if not line:
@@ -216,14 +248,13 @@ def import_new_data(run) -> dict:
             if not note_id:
                 continue
             comments_by_note.setdefault(note_id, []).append(comment_parser(item))
-        comments_progress.append((state, total_lines))
 
     # ---- 3. 入库：评论（帖子入库后由信号回填外键） ----
     comment_total = 0
     for note_id, comment_list in comments_by_note.items():
         comment_total += store_comments(site_platform, note_id, comment_list)
 
-    # ---- 4. 入库：帖子（清洗/去重走既有 ingest 流水线） ----
+    # ---- 4. 入库：帖子（清洗/去重走既有 ingest 流水线，主题=任务来源） ----
     collection_run = CollectionRun.objects.create(
         topic=topic, platform=site_platform,
         trigger_type="manual", status="running", started_at=now,
@@ -255,14 +286,6 @@ def import_new_data(run) -> dict:
             check_after_collection(topic, run=collection_run, post_ids=list(result.touched_post_ids))
         except Exception:
             logger.exception("alert check after mediacrawler import failed")
-
-        # ---- 7. 全部成功后推进文件进度 ----
-        for state, total_lines in contents_progress:
-            state.imported_lines = total_lines
-            state.save(update_fields=["imported_lines"])
-        for state, total_lines in comments_progress:
-            state.imported_lines = total_lines
-            state.save(update_fields=["imported_lines"])
 
         return {
             "fetched": len(raw_posts),
