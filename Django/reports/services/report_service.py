@@ -45,8 +45,30 @@ def _period_range(period_type: str, report_date: date | None = None) -> tuple:
     return start, end
 
 
+def _top_viewpoints(topic_ids, start, end, limit=10):
+    """聚合周期内帖子的热门观点（LLM 提取的 key_viewpoints），按出现次数排序。"""
+    from collections import Counter
+
+    from analysis.models import AnalysisResult
+    from posts.models import PostTopicHit
+
+    hits = PostTopicHit.objects.filter(topic_id__in=topic_ids)
+    if start:
+        hits = hits.filter(first_hit_at__gte=start)
+    if end:
+        hits = hits.filter(first_hit_at__lte=end)
+    counter = Counter()
+    for vps in AnalysisResult.objects.filter(
+        post_id__in=hits.values("post_id"), key_viewpoints__len__gt=0,
+    ).values_list("key_viewpoints", flat=True):
+        for v in vps or []:
+            if isinstance(v, str) and v.strip():
+                counter[v.strip()] += 1
+    return [{"viewpoint": v, "count": c} for v, c in counter.most_common(limit)]
+
+
 def _collect_statistics(topic, start, end) -> dict:
-    """聚合主题周期内统计。"""
+    """聚合主题周期内统计（对齐需求文档「舆情分析看板」口径）。"""
     topic_ids = [topic.id]
     sentiment = q.sentiment_distribution(topic_ids, None, start, end)
     overview = q.overview(topic_ids, None, start, end)
@@ -54,6 +76,19 @@ def _collect_statistics(topic, start, end) -> dict:
     hot = q.hot_posts(topic_ids, start=start, end=end, limit=5)
     negative = q.negative_posts(topic_ids, start=start, end=end, limit=5)
     platforms = q.platform_distribution(topic_ids, start, end)
+    trend = q.trend(topic_ids, None, start, end, bucket="day")
+    inter_trend = q.interaction_trend(topic_ids, None, start, end, bucket="day")
+    heat_trend = q.heat_trend(topic_ids, None, start, end, bucket="day")
+    key_authors = q.key_authors(topic_ids, None, start, end, limit=5)
+    viewpoints = _top_viewpoints(topic_ids, start, end, limit=10)
+
+    interaction_total = {
+        "likes": sum(r["likes"] for r in inter_trend),
+        "comments": sum(r["comments"] for r in inter_trend),
+        "shares": sum(r["shares"] for r in inter_trend),
+        "favorites": sum(r["favorites"] for r in inter_trend),
+    }
+    peak_heat = round(max((r["heat"] for r in heat_trend), default=0), 2)
 
     return {
         "post_count": overview["post_count"],
@@ -65,6 +100,13 @@ def _collect_statistics(topic, start, end) -> dict:
         "avg_heat": overview["avg_heat"],
         "platform_distribution": platforms,
         "alert_count": overview["alert_count"],
+        "trend": trend,
+        "interaction_total": interaction_total,
+        "interaction_trend": inter_trend,
+        "heat_trend": heat_trend,
+        "peak_heat": peak_heat,
+        "key_authors": key_authors,
+        "top_viewpoints": viewpoints,
         "top_keywords": keywords,
         "hot_posts": hot,
         "negative_posts": negative,
@@ -81,7 +123,8 @@ def _llm_summary(topic, period_type, stats: dict) -> str | None:
     system = (
         "你是一名资深舆情分析师，为芒果TV品牌与内容运营撰写舆情报告摘要。"
         "要求：150~250 字中文，客观凝练，先总后分——整体声量与情感分布、"
-        "负面焦点与风险点、高热内容、最后给一条处置建议。"
+        "平台与互动表现、热度变化与重点作者、负面焦点与风险点、高热内容、"
+        "最后给一条处置建议。"
         "只输出摘要正文，不要标题、序号或任何额外说明。"
     )
     user = "监测主题：%s\n统计周期：%s\n统计数据(JSON)：\n%s" % (
@@ -112,8 +155,26 @@ def _build_template_summary(topic, period_type, stats: dict) -> str:
         f"其中负面 {neg} 条（占比 {neg_ratio}%），正面 {sentiment.get('positive', 0)} 条，"
         f"中性 {sentiment.get('neutral', 0)} 条。",
     ]
+    platforms = stats.get("platform_distribution") or {}
+    if platforms:
+        lines.append("平台分布：" + "、".join(f"{k} {v} 条" for k, v in platforms.items()) + "。")
+    inter = stats.get("interaction_total") or {}
+    if inter:
+        lines.append(
+            f"互动量：累计点赞 {inter.get('likes', 0)}、评论 {inter.get('comments', 0)}、"
+            f"转发 {inter.get('shares', 0)}、收藏 {inter.get('favorites', 0)}。"
+        )
     if stats.get("avg_heat"):
-        lines.append(f"平均热度 {stats['avg_heat']}。")
+        heat_line = f"平均热度 {stats['avg_heat']}"
+        if stats.get("peak_heat"):
+            heat_line += f"，峰值热度 {stats['peak_heat']}"
+        lines.append(heat_line + "。")
+    authors = stats.get("key_authors") or []
+    if authors:
+        lines.append("重点作者：" + "、".join(f"{a.get('name')}（{a.get('post_count', 0)} 帖）" for a in authors[:3]) + "。")
+    viewpoints = stats.get("top_viewpoints") or []
+    if viewpoints:
+        lines.append("热门观点：" + "、".join(v.get("viewpoint", "") for v in viewpoints[:5]) + "。")
     if neg:
         keywords = [kw.get("keyword", "") for kw in stats["top_keywords"][:5] if kw.get("keyword")]
         if keywords:
@@ -129,15 +190,19 @@ def _build_template_summary(topic, period_type, stats: dict) -> str:
 
 
 def generate_report(topic, period_type: str, report_date: date | None = None) -> Report:
-    """生成/更新指定主题周期报告，返回 Report 记录。"""
+    """生成指定主题周期报告，返回 Report 记录。
+
+    每次调用都新建一条记录，不覆盖历史报告：同一天多次生成的日报/周报各自保留，
+    统计窗口锚定本次 report_date（默认今天），期间新采集的数据计入新报告。
+    """
     report_date = report_date or timezone.localdate()
-    report, _ = Report.objects.get_or_create(
-        topic=topic, period_type=period_type, report_date=report_date,
-        defaults={"title": f"{topic.name}{'日报' if period_type == 'daily' else '周报'} {report_date:%Y-%m-%d}",
-                  "status": "generating"},
+    report = Report.objects.create(
+        topic=topic,
+        period_type=period_type,
+        report_date=report_date,
+        title=f"{topic.name}{'日报' if period_type == 'daily' else '周报'} {report_date:%Y-%m-%d}",
+        status="generating",
     )
-    report.status = "generating"
-    report.save(update_fields=["status"])
 
     try:
         start, end = _period_range(period_type, report_date)

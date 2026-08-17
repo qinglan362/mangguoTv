@@ -88,6 +88,33 @@ async function createExport() {
   }
 }
 
+const exportingRow = ref<number | null>(null)
+
+async function exportReport(row: ReportRecord) {
+  exportingRow.value = row.id
+  try {
+    const base = dayjs(row.report_date)
+    const start = row.period_type === 'weekly' ? base.subtract(6, 'day') : base
+    const filters: Record<string, unknown> = {
+      topic_ids: [row.topic],
+      topic_names: row.topic_name || '',
+      start: start.format('YYYY-MM-DDT00:00:00'),
+      end: base.add(1, 'day').format('YYYY-MM-DDT00:00:00'),
+      period_type: row.period_type,
+      report_date: row.report_date,
+    }
+    const record = await reportApi.createExport({ export_type: 'full', filters })
+    if (record.status === 'done') {
+      downloadExport(record)
+    } else {
+      ElMessage.warning('导出任务已创建，可在「数据导出」页下载')
+    }
+    loadExports()
+  } finally {
+    exportingRow.value = null
+  }
+}
+
 async function downloadExport(row: DataExportRecord) {
   if (!row.download_url) {
     ElMessage.warning('文件未生成')
@@ -108,7 +135,9 @@ async function downloadExport(row: DataExportRecord) {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `export_${row.id}.csv`
+    // 用服务端生成的真实文件名（报告导出为「主题+日报/周报+日期」）
+    const baseName = (row.file_path || '').split(/[\\/]/).pop()
+    a.download = baseName || `export_${row.id}.csv`
     document.body.appendChild(a)
     a.click()
     a.remove()
@@ -158,21 +187,26 @@ onMounted(async () => {
           </div>
 
           <el-table :data="reports" style="width: 100%">
-            <el-table-column prop="title" label="报告标题" min-width="220" />
-            <el-table-column prop="topic_name" label="主题" width="160" />
-            <el-table-column label="类型" width="80">
+            <el-table-column prop="title" label="报告标题" min-width="200" />
+            <el-table-column prop="topic_name" label="主题" min-width="120" />
+            <el-table-column label="类型" min-width="70">
               <template #default="{ row }">{{ row.period_type === 'daily' ? '日报' : '周报' }}</template>
             </el-table-column>
-            <el-table-column prop="report_date" label="报告日期" width="110" />
-            <el-table-column label="状态" width="90">
+            <el-table-column prop="report_date" label="报告日期" min-width="110" />
+            <el-table-column label="状态" min-width="80">
               <template #default="{ row }">
                 <el-tag :type="STATUS_MAP[row.status]?.type || 'info'" size="small">{{ STATUS_MAP[row.status]?.label }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="生成时间" width="130">
+            <el-table-column label="生成时间" min-width="140">
               <template #default="{ row }">{{ fmtTime(row.generated_at || row.created_at) }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="90" fixed="right">
+            <el-table-column label="导出报告" min-width="90">
+              <template #default="{ row }">
+                <el-button v-if="row.status === 'done'" link type="success" size="small" :loading="exportingRow === row.id" @click="exportReport(row)">导出</el-button>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" min-width="80" fixed="right">
               <template #default="{ row }">
                 <el-button v-if="row.status === 'done'" link type="primary" size="small" @click="showDetail(row)">查看</el-button>
               </template>

@@ -103,14 +103,20 @@ def mediacrawler_status(request):
     topic_id = request.query_params.get("topic")
     if topic_id:
         qs = qs.filter(topic_id=topic_id)
-    # 优先返回当前运行/排队中的记录，否则返回最近一条
-    run = qs.filter(status__in=["running", "queued", "importing"]).order_by("-id").first()
+    # 优先返回真正在执行的运行（running/importing）；排队中（queued）的任务没有日志，
+    # 若按 id 倒序取第一条会盖住正在运行的记录，导致采集过程页日志空白。
+    # 都没有时回退到最近一条有日志的运行（跳过无日志的导入记录），再退而求其次取最近一条。
+    run = qs.filter(status__in=["running", "importing"]).order_by("-id").first()
+    if run is None:
+        run = qs.filter(status="queued").order_by("-id").first()
+    if run is None:
+        run = qs.exclude(log_path="").order_by("-id").first()
     if run is None:
         run = qs.order_by("-id").first()
     proc = get_running_process()
     running = (
         (proc is not None and run is not None and run.status in ("running", "importing"))
-        or (run is not None and run.status == "queued")
+        or (run is not None and run.status in ("queued", "running", "importing"))
         or has_pending()
     )
     data = MediaCrawlerRunSerializer(run).data if run else None

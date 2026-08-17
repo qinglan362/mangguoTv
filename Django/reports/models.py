@@ -62,12 +62,6 @@ class Report(models.Model):
     class Meta:
         verbose_name = "舆情报告"
         verbose_name_plural = verbose_name
-        constraints = [
-            models.UniqueConstraint(
-                fields=["topic", "period_type", "report_date"],
-                name="uq_topic_period_date",
-            ),
-        ]
 
     def __str__(self):
         return f"{self.topic.name} {self.report_date} {self.period_type}"

@@ -17,6 +17,15 @@ class ReportGenerationTests(TestCase):
         self.assertTrue(Report.objects.filter(topic=self.topic, period_type="daily").exists())
         self.assertTrue(report.summary)
 
+    def test_generate_twice_keeps_both_reports(self):
+        """同一天两次生成日报：各自保留为独立记录，旧报告不被覆盖。"""
+        first = generate_report(self.topic, "daily")
+        second = generate_report(self.topic, "daily")
+        self.assertNotEqual(first.id, second.id)
+        self.assertEqual(Report.objects.filter(topic=self.topic, period_type="daily").count(), 2)
+        self.assertEqual(first.status, "done")
+        self.assertEqual(second.status, "done")
+
     def test_period_range_daily_is_full_day(self):
         """M17：日报统计窗口锚定 report_date 全天，而非仅当下时刻。"""
         from datetime import date

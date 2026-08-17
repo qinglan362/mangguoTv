@@ -4,6 +4,7 @@
 进程重启后按 active 主题从 DB 重建调度任务（DB 为唯一事实源）。
 """
 import logging
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +30,17 @@ def ensure_started():
     from .dispatch import dispatch_manager
     dispatch_manager.start()
 
-    # 服务重启后对账：上次进程里卡住的 MediaCrawler 运行标记停止并自动导入数据
-    try:
-        from collectors.plugins.mediacrawler.runner import reconcile_stale_runs
-        reconcile_stale_runs()
-    except Exception:
-        pass
+    # 服务重启后对账：上次进程里卡住的 MediaCrawler 运行标记停止并自动导入数据。
+    # 放到后台守护线程执行：导入可能含 LLM 分析等耗时步骤，不能阻塞服务器启动
+    # （否则启动期间端口不监听，前端全部请求失败）。
+    def _boot_reconcile():
+        try:
+            from collectors.plugins.mediacrawler.runner import reconcile_stale_runs
+            reconcile_stale_runs()
+        except Exception:
+            pass
+
+    threading.Thread(target=_boot_reconcile, name="mediacrawler-reconcile-boot", daemon=True).start()
 
     scheduler = get_scheduler()
     if not scheduler.running:

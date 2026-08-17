@@ -41,6 +41,24 @@ function fmtTime(t: string | null | undefined) {
 
 function fmtTrigger(job: SchedulerJob) {
   if (job.interval_minutes) return '每 ' + job.interval_minutes + ' 分钟'
+  const m = job.trigger?.match(/^cron\[(.*)\]$/)
+  if (m && m[1] !== undefined) {
+    const fields: Record<string, string> = {}
+    for (const part of m[1].split(',')) {
+      const eq = part.indexOf('=')
+      if (eq > 0) fields[part.slice(0, eq).trim()] = part.slice(eq + 1).trim().replace(/^'|'$/g, '')
+    }
+    // 存在具体的日期/月份表达式时不臆测，保持原样
+    if ((fields.day && fields.day !== '*') || (fields.month && fields.month !== '*')) return job.trigger
+    const time = (fields.hour ?? '0').padStart(2, '0') + ':' + (fields.minute ?? '0').padStart(2, '0')
+    const DOW: Record<string, string> = { mon: '一', tue: '二', wed: '三', thu: '四', fri: '五', sat: '六', sun: '日' }
+    const dow = fields.day_of_week ?? ''
+    if (dow && dow !== '*') {
+      const days = dow.split(',').map((d) => DOW[d.trim()] || d.trim()).filter(Boolean)
+      if (days.length) return '每周' + days.join('、') + ' ' + time
+    }
+    return '每天 ' + time
+  }
   return job.trigger
 }
 

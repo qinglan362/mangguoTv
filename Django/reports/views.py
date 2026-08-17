@@ -66,9 +66,11 @@ class DataExportViewSet(viewsets.ModelViewSet):
         path = export_absolute_path(obj.file_path)
         if not path.exists():
             return Response({"detail": "文件不存在"}, status=http_status.HTTP_404_NOT_FOUND)
-        response = FileResponse(open(path, "rb"), content_type="text/csv; charset=utf-8")
-        response["Content-Disposition"] = f'attachment; filename="{path.name}"'
-        return response
+        # as_attachment + filename 由 Django 按 RFC 5987 编码中文文件名（filename*=utf-8''...）
+        return FileResponse(
+            open(path, "rb"), content_type="text/csv; charset=utf-8",
+            as_attachment=True, filename=path.name,
+        )
 
 
 class ReportViewSet(viewsets.ReadOnlyModelViewSet):
