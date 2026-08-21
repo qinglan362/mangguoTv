@@ -36,15 +36,32 @@ def run_for_topic(topic, limit: int = 500):
     keywords = list(topic.keywords.filter(kind__in=["core", "related"]).values_list("word", flat=True))
     negative_extra = rules.get_topic_negative_keywords(topic.id)
 
-    # 规则层快判（不相关直接判定；相关帖先用规则算好兜底结果）
+    # 规则层兜底：关键词/词典判定仅作为 LLM 缺失或失败时的兜底结果。
+    # 不按关键词字面命中决定是否送 LLM——小红书等平台大量帖子（艺人本人账号、
+    # 纯图片/视频笔记、昵称命中等）正文不含主题关键词，但语义上属于主题，
+    # 一律交给 LLM 判定相关性与情感，避免关键词未命中被直接标成 unknown。
     rule_results = {}     # post_id -> dict（最终结果）
     rule_fallbacks = {}   # post_id -> dict（LLM 缺失/失败时的兜底）
-    llm_candidates = []   # 需要 LLM 分析的帖子（全部相关帖，正负面统一交给 LLM）
+    llm_candidates = []   # 需要 LLM 分析的帖子（主题下全部新帖）
     for post in candidates:
         text = "%s\n%s" % (post.title, post.content)
         is_rel = rules.check_relevance(text, keywords)
-        if not is_rel:
-            rule_results[post.id] = {
+        classified = rules.classify_by_rules(text, keywords, negative_extra)
+        llm_candidates.append(post)
+        if is_rel:
+            rule_fallbacks[post.id] = {
+                "is_related": True,
+                "related_score": 0.9 if classified["sentiment"] == "negative" else 0.8,
+                "sentiment": classified["sentiment"],
+                "sentiment_score": classified["score"],
+                "source": classified["source"],
+                "viewpoints": [],
+                "entities": [],
+                "keywords": [],
+            }
+        else:
+            # 关键词未命中：LLM 可用时由其判定；仅当 LLM 缺失/失败时保持 unknown 兜底
+            rule_fallbacks[post.id] = {
                 "is_related": False,
                 "related_score": 0.2,
                 "sentiment": "unknown",
@@ -54,22 +71,10 @@ def run_for_topic(topic, limit: int = 500):
                 "entities": [],
                 "keywords": [],
             }
-            continue
-        classified = rules.classify_by_rules(text, keywords, negative_extra)
-        llm_candidates.append(post)
-        rule_fallbacks[post.id] = {
-            "is_related": True,
-            "related_score": 0.9 if classified["sentiment"] == "negative" else 0.8,
-            "sentiment": classified["sentiment"],
-            "sentiment_score": classified["score"],
-            "source": classified["source"],
-            "viewpoints": [],
-            "entities": [],
-            "keywords": [],
-        }
 
-    # LLM 层批量：配置了 API Key 时，相关帖（含正/负/中性）全部交给 LLM 判定，
-    # 规则结果仅作为 LLM 未返回/调用失败时的兜底；未配置 Key 时整体走规则层。
+    # LLM 层批量：配置了 API Key 时，主题下全部新帖（含关键词未命中的帖子）
+    # 统一交给 LLM 判定相关性与情感，规则结果仅作为 LLM 未返回/调用失败时的兜底；
+    # 未配置 Key 时整体走规则层兜底（关键词未命中仍标 unknown）。
     backend = get_llm_backend()
     if llm_candidates and backend is not None:
         llm_results = _run_llm_batches(backend, llm_candidates, topic, keywords)

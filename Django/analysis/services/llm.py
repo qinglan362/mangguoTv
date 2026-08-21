@@ -84,8 +84,12 @@ def _build_messages(posts: list, topic_context: dict):
     )
     lines = []
     for i, p in enumerate(posts):
-        content = p.get("content", "") or p.get("title", "")
-        lines.append("%d. %s" % (i + 1, content[:500]))
+        # 标题与正文一并发送：小红书大量帖子正文为空或正文不含关键词，
+        # 只发正文会丢失标题里的关键信息，影响相关性/情感判断
+        title = (p.get("title") or "").strip()
+        content = (p.get("content") or "").strip()
+        text = "%s\n%s" % (title, content) if title else content
+        lines.append("%d. %s" % (i + 1, text[:500]))
     user = (
         "监测主题：%s\n"
         "核心关键词：%s\n"
